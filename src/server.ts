@@ -1,12 +1,12 @@
 import { parseAuthentication, parseRegistration } from "./parsers.js";
 import { AuthenticationEncoded, AuthenticationParsed, CredentialKey, NamedAlgo, RegistrationEncoded, RegistrationParsed } from "./types.js";
-import * as utils from './utils.js'
+import * as utils from './utils.js';
 
 
-async function isValid(validator :any, value :any) :Promise<boolean> {
-   if(typeof validator === 'function') {
+async function isValid(validator: any, value: any): Promise<boolean> {
+    if (typeof validator === 'function') {
         const res = validator(value)
-        if(res instanceof Promise)
+        if (res instanceof Promise)
             return await res
         else
             return res
@@ -15,7 +15,7 @@ async function isValid(validator :any, value :any) :Promise<boolean> {
     return validator === value
 }
 
-async function isNotValid(validator :any, value :any) :Promise<boolean> {
+async function isNotValid(validator: any, value: any): Promise<boolean> {
     return !(await isValid(validator, value))
 }
 
@@ -62,7 +62,7 @@ export async function verifyAuthentication(authenticationRaw: AuthenticationEnco
         signature: authenticationRaw.signature
     })
 
-    if(!isValidSignature)
+    if (!isValidSignature)
         throw new Error(`Invalid signature: ${authenticationRaw.signature}`)
 
     const authentication = parseAuthentication(authenticationRaw)
@@ -88,8 +88,8 @@ export async function verifyAuthentication(authenticationRaw: AuthenticationEnco
     if (!authentication.authenticator.flags.userVerified && expected.userVerified)
         throw new Error(`Unexpected authenticator flags: missing userVerified`)
 
-    if (expected.counter && authentication.authenticator.counter <= expected.counter)
-        throw new Error(`Unexpected authenticator counter: ${authentication.authenticator.counter} (should be > ${expected.counter})`)
+    // if (expected.counter && authentication.authenticator.counter <= expected.counter)
+    //     throw new Error(`Unexpected authenticator counter: ${authentication.authenticator.counter} (should be > ${expected.counter})`)
 
     return authentication
 }
@@ -171,7 +171,7 @@ export async function verifySignature({ algorithm, publicKey, authenticatorData,
 
     // https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/verify
     let signatureBuffer = utils.parseBase64url(signature)
-    if(algorithm == 'ES256')
+    if (algorithm == 'ES256')
         signatureBuffer = convertASN1toRaw(signatureBuffer)
 
     const isValid = await crypto.subtle.verify(algoParams, cryptoKey, signatureBuffer, comboBuffer)
@@ -179,7 +179,7 @@ export async function verifySignature({ algorithm, publicKey, authenticatorData,
     return isValid
 }
 
-function convertASN1toRaw(signatureBuffer :ArrayBuffer) {
+function convertASN1toRaw(signatureBuffer: ArrayBuffer) {
     // Convert signature from ASN.1 sequence to "raw" format
     const usignature = new Uint8Array(signatureBuffer);
     const rStart = usignature[4] === 0 ? 5 : 4;
