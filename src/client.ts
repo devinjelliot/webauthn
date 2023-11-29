@@ -1,56 +1,49 @@
-import * as utils from './utils.js'
-import { AuthenticateOptions, AuthenticationEncoded, AuthType, NamedAlgo, NumAlgo, RegisterOptions, RegistrationEncoded } from './types.js'
+import { AuthType, AuthenticateOptions, AuthenticationEncoded, CustomAuthenticationExtensionsClientInputs, ExtendedAuthenticatorAssertionResponse, NamedAlgo, NumAlgo, RegisterOptions, RegistrationEncoded } from './types.js';
+import * as utils from './utils.js';
 
 /**
  * Returns whether passwordless authentication is available on this browser/platform or not.
  */
- export function isAvailable() :boolean {
+export function isAvailable(): boolean {
     return !!window.PublicKeyCredential
 }
 
 /**
  * Returns whether the device itself can be used as authenticator.
  */
-export async function isLocalAuthenticator() :Promise<boolean> {
+export async function isLocalAuthenticator(): Promise<boolean> {
     return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
 }
 
-
-
-
-async function getAuthAttachment(authType :AuthType) :Promise<AuthenticatorAttachment|undefined> {
-    if(authType === "local")
+async function getAuthAttachment(authType: AuthType): Promise<AuthenticatorAttachment | undefined> {
+    if (authType === "local")
         return "platform";
-    if(authType === "roaming" || authType === "extern")
+    if (authType === "roaming" || authType === "extern")
         return "cross-platform";
-    if(authType === "both")
+    if (authType === "both")
         return undefined // The webauthn protocol considers `null` as invalid but `undefined` as "both"!
 
     // the default case: "auto", depending on device capabilities
     try {
-        if(await isLocalAuthenticator())
+        if (await isLocalAuthenticator())
             return "platform"
         else
             return "cross-platform"
-    } catch(e) {
+    } catch (e) {
         // might happen due to some security policies
         // see https://w3c.github.io/webauthn/#sctn-isUserVerifyingPlatformAuthenticatorAvailable
         return undefined // The webauthn protocol considers `null` as invalid but `undefined` as "both"!
     }
 }
 
-
-
-function getAlgoName(num :NumAlgo) :NamedAlgo {
-    switch(num) {
+function getAlgoName(num: NumAlgo): NamedAlgo {
+    switch (num) {
         case -7: return "ES256"
         // case -8 ignored to to its rarity
         case -257: return "RS256"
         default: throw new Error(`Unknown algorithm code: ${num}`)
     }
 }
-
-
 
 /**
  * Creates a cryptographic key pair, in order to register the public key for later passwordless authentication.
@@ -70,14 +63,15 @@ function getAlgoName(num :NumAlgo) :NamedAlgo {
  * @param {'discouraged'|'preferred'|'required'} [options.discoverable] A "discoverable" credential can be selected using `authenticate(...)` without providing credential IDs.
  *              Instead, a native pop-up will appear for user selection.
  *              This may have an impact on the "passkeys" user experience and syncing behavior of the key.
+ * @param {boolean} [options.largeBlobSupport=false] If enabled, the device will be able to read and write large blobs of data.
  */
-export async function register(username :string, challenge :string, options? :RegisterOptions) :Promise<RegistrationEncoded> {
+export async function register(username: string, challenge: string, options?: RegisterOptions): Promise<RegistrationEncoded> {
     options = options ?? {}
 
-    if(!utils.isBase64url(challenge))
+    if (!utils.isBase64url(challenge))
         throw new Error('Provided challenge is not properly encoded in Base64url')
 
-    const creationOptions :PublicKeyCredentialCreationOptions = {
+    let creationOptions: PublicKeyCredentialCreationOptions & { extensions?: CustomAuthenticationExtensionsClientInputs } = {
         challenge: utils.parseBase64url(challenge),
         rp: {
             id: window.location.hostname,
@@ -89,8 +83,8 @@ export async function register(username :string, challenge :string, options? :Re
             displayName: username,
         },
         pubKeyCredParams: [
-            {alg: -7, type: "public-key"},   // ES256 (Webauthn's default algorithm)
-            {alg: -257, type: "public-key"}, // RS256 (for Windows Hello and others)
+            { alg: -7, type: "public-key" },   // ES256 (Webauthn's default algorithm)
+            { alg: -257, type: "public-key" }, // RS256 (for Windows Hello and others)
         ],
         timeout: options.timeout ?? 60000,
         authenticatorSelection: {
@@ -99,20 +93,25 @@ export async function register(username :string, challenge :string, options? :Re
             residentKey: options.discoverable ?? 'preferred', // official default is 'discouraged'
             requireResidentKey: (options.discoverable === 'required') // mainly for backwards compatibility, see https://www.w3.org/TR/webauthn/#dictionary-authenticatorSelection
         },
-        attestation: options.attestation ? "direct" : "none"
+        attestation: options.attestation ? "direct" : "none",
     }
 
-    if(options.debug)
+    // Check and add the largeBlob support if needed
+    if (options.largeBlobSupport) {
+        creationOptions.extensions = { largeBlob: { support: 'required' } } as CustomAuthenticationExtensionsClientInputs;
+    }
+
+    if (options.debug)
         console.debug(creationOptions)
 
-    const credential = await navigator.credentials.create({publicKey: creationOptions}) as any //PublicKeyCredential
-    
-    if(options.debug)
+    const credential = await navigator.credentials.create({ publicKey: creationOptions }) as any //PublicKeyCredential
+
+    if (options.debug)
         console.debug(credential)
-   
+
     const response = credential.response as any // AuthenticatorAttestationResponse
-    
-    let registration :RegistrationEncoded = {
+
+    let registration: RegistrationEncoded = {
         username: username,
         credential: {
             id: credential.id,
@@ -123,7 +122,7 @@ export async function register(username :string, challenge :string, options? :Re
         clientData: utils.toBase64url(response.clientDataJSON),
     }
 
-    if(options.attestation) {
+    if (options.attestation) {
         registration.attestationData = utils.toBase64url(response.attestationObject)
     }
 
@@ -131,27 +130,27 @@ export async function register(username :string, challenge :string, options? :Re
 }
 
 
-async function getTransports(authType :AuthType) :Promise<AuthenticatorTransport[]> {
-    const local  :AuthenticatorTransport[] = ['internal']
+async function getTransports(authType: AuthType): Promise<AuthenticatorTransport[]> {
+    const local: AuthenticatorTransport[] = ['internal']
 
     // 'hybrid' was added mid-2022 in the specs and currently not yet available in the official dom types
     // @ts-ignore
-    const roaming :AuthenticatorTransport[] = ['hybrid', 'usb', 'ble', 'nfc']
-    
-    if(authType === "local")
+    const roaming: AuthenticatorTransport[] = ['hybrid', 'usb', 'ble', 'nfc']
+
+    if (authType === "local")
         return local
-    if(authType == "roaming" || authType === "extern")
+    if (authType == "roaming" || authType === "extern")
         return roaming
-    if(authType === "both")
+    if (authType === "both")
         return [...local, ...roaming]
 
     // the default case: "auto", depending on device capabilities
     try {
-        if(await isLocalAuthenticator())
+        if (await isLocalAuthenticator())
             return local
         else
             return roaming
-    } catch(e) {
+    } catch (e) {
         return [...local, ...roaming]
     }
 }
@@ -167,44 +166,63 @@ async function getTransports(authType :AuthType) :Promise<AuthenticatorTransport
  * @param {'required'|'preferred'|'discouraged'} [options.userVerification='required'] Whether to prompt for biometric/PIN check or not.
  * @param {'optional'|'conditional'|'required'|'silent'} [options.mediation='optional'] https://developer.mozilla.org/en-US/docs/Web/API/CredentialsContainer/get#mediation
  */
-export async function authenticate(credentialIds :string[], challenge :string, options? :AuthenticateOptions) :Promise<AuthenticationEncoded> {
-    options = options ?? {}
+export async function authenticate(credentialIds: string[], challenge: string, options?: AuthenticateOptions): Promise<AuthenticationEncoded> {
+    options = options ?? {};
 
-    if(!utils.isBase64url(challenge))
-        throw new Error('Provided challenge is not properly encoded in Base64url')
+    if (!utils.isBase64url(challenge))
+        throw new Error('Provided challenge is not properly encoded in Base64url');
 
     const transports = await getTransports(options.authenticatorType ?? "auto");
 
-    let authOptions :PublicKeyCredentialRequestOptions = {
+    let authOptions: PublicKeyCredentialRequestOptions & { extensions?: CustomAuthenticationExtensionsClientInputs } = {
         challenge: utils.parseBase64url(challenge),
         rpId: window.location.hostname,
-        allowCredentials: credentialIds.map(id => { return {
+        allowCredentials: credentialIds.map(id => ({
             id: utils.parseBase64url(id),
             type: 'public-key',
             transports: transports,
-        }}),
+        })),
         userVerification: options.userVerification ?? "required",
         timeout: options.timeout ?? 60000,
+        extensions: {},
+    };
+
+    if (options.largeBlobRead || options.largeBlobWrite) {
+        authOptions.extensions = authOptions.extensions ?? {}; // Ensure extensions is initialized
+        authOptions.extensions.largeBlob = authOptions.extensions.largeBlob ?? {}; // Ensure largeBlob is initialized
+        if (options.largeBlobRead) {
+            authOptions.extensions.largeBlob.read = true;
+        }
+        if (options.largeBlobWrite) {
+            authOptions.extensions.largeBlob.write = await utils.blobToBufferSource(options.largeBlobWrite);
+        }
     }
 
-    if(options.debug)
-        console.debug(authOptions)
+    if (options.debug)
+        console.debug(authOptions);
 
-    let auth = await navigator.credentials.get({publicKey: authOptions, mediation: options.mediation}) as PublicKeyCredential
-    
-    if(options.debug)
-        console.debug(auth)
+    let auth = await navigator.credentials.get({ publicKey: authOptions, mediation: options.mediation }) as PublicKeyCredential;
 
-    const response = auth.response as AuthenticatorAssertionResponse
-    
-    const authentication :AuthenticationEncoded = {
+    if (options.debug)
+        console.debug(auth);
+
+    const response = auth.response as ExtendedAuthenticatorAssertionResponse;
+
+    const authentication: AuthenticationEncoded = {
         credentialId: auth.id,
-        //userHash: utils.toBase64url(response.userHandle), // unreliable, optional for authenticators
         authenticatorData: utils.toBase64url(response.authenticatorData),
         clientData: utils.toBase64url(response.clientDataJSON),
         signature: utils.toBase64url(response.signature),
+    };
+
+    if (options.largeBlobRead && response.getLargeBlob) {
+        const largeBlobData = await response.getLargeBlob();
+        if (largeBlobData) {
+            authentication.largeBlobData = utils.toBase64url(new Uint8Array(largeBlobData));
+        }
     }
 
-    return authentication
+    return authentication;
 }
+
 

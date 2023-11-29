@@ -9,23 +9,45 @@ export type NamedAlgo = 'RS256' | 'ES256'
 
 
 export interface CommonOptions {
-  userVerification ?:UserVerificationRequirement
-  authenticatorType ?:AuthType
-  timeout ?:number
-  debug ?:boolean
+  userVerification?: UserVerificationRequirement
+  authenticatorType?: AuthType
+  timeout?: number
+  debug?: boolean
 }
 
-
+// larbeBlobSupport here
 export interface AuthenticateOptions extends CommonOptions {
-  mediation ?:CredentialMediationRequirement
+  mediation?: CredentialMediationRequirement
+  largeBlobRead?: boolean
+  largeBlobWrite?: Blob
+}
+
+enum LargeBlobSupport {
+  Required = "required",
+  Preferred = "preferred",
+}
+
+export interface AuthenticationExtensionsLargeBlobInputs {
+  support?: LargeBlobSupport;
+  read?: boolean;
+  write?: BufferSource;
+}
+
+export interface CustomAuthenticationExtensionsClientInputs extends AuthenticationExtensionsClientInputs {
+  largeBlob?: AuthenticationExtensionsLargeBlobInputs;
+}
+
+export interface ExtendedAuthenticatorAssertionResponse extends AuthenticatorAssertionResponse {
+  getLargeBlob?: () => Promise<ArrayBuffer | null>;
 }
 
 export interface AuthenticationEncoded {
-    credentialId: string
-    //userHash: string, // unreliable, optional for authenticators
-    authenticatorData: string
-    clientData: string
-    signature: string
+  credentialId: string
+  //userHash: string, // unreliable, optional for authenticators
+  authenticatorData: string
+  clientData: string
+  signature: string
+  largeBlobData?: string
 }
 
 export interface AuthenticationParsed {
@@ -36,11 +58,12 @@ export interface AuthenticationParsed {
   signature: string
 }
 
-
+// largeBlobSupport here
 export interface RegisterOptions extends CommonOptions {
   userHandle?: string
   attestation?: boolean
   discoverable?: ResidentKeyRequirement
+  largeBlobSupport?: boolean
 }
 
 
@@ -52,19 +75,19 @@ export interface CredentialKey {
 
 
 export interface RegistrationEncoded {
-    username: string
-    credential: CredentialKey
-    authenticatorData: string
-    clientData: string
-    attestationData?: string
+  username: string
+  credential: CredentialKey
+  authenticatorData: string
+  clientData: string
+  attestationData?: string
 }
 
 export interface RegistrationParsed {
   username: string
   credential: {
-      id: string
-      publicKey: string
-      algorithm: 'RS256' | 'ES256'
+    id: string
+    publicKey: string
+    algorithm: 'RS256' | 'ES256'
   }
   authenticator: AuthenticatorInfo
   client: ClientInfo
@@ -84,16 +107,16 @@ export interface ClientInfo {
 }
 
 export interface AuthenticatorInfo {
-    rpIdHash: string,
-    flags: {
-      userPresent: boolean
-      userVerified: boolean
-      backupEligibility: boolean
-      backupState: boolean
-      attestedData: boolean
-      extensionsIncluded: boolean
-    }
-    counter: number
-    aaguid: string
-    name: string
+  rpIdHash: string,
+  flags: {
+    userPresent: boolean
+    userVerified: boolean
+    backupEligibility: boolean
+    backupState: boolean
+    attestedData: boolean
+    extensionsIncluded: boolean
   }
+  counter?: number // MacOS does not return this TODO: check the spec
+  aaguid: string
+  name: string
+}

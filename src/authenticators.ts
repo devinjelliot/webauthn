@@ -1,35 +1,35 @@
-import authenticatorMetadata from './authenticatorMetadata.js' //assert {type: 'json'}
+import authenticatorMetadata from './authenticatorMetadata.js'; //assert {type: 'json'}
 import * as utils from './utils.js'
 
 
-export function parseAuthBuffer(authData :ArrayBuffer) {
+export function parseAuthBuffer(authData: ArrayBuffer) {
     console.debug(authData)
-    let flags = new DataView(authData.slice(32,33)).getUint8(0)
+    let flags = new DataView(authData.slice(32, 33)).getUint8(0)
     console.debug(flags)
 
     // https://w3c.github.io/webauthn/#sctn-authenticator-data
-    let parsed :any = {
-        rpIdHash: utils.toBase64url(authData.slice(0,32)),
-            flags: {
-                 userPresent: !!(flags & 1),
-                 //reserved1: !!(flags & 2),
-                 userVerified: !!(flags &  4),
-                 backupEligibility: !!(flags & 8),
-                 backupState: !!(flags & 16),
-                 //reserved2: !!(flags & 32),
-                 attestedData: !!(flags & 64),
-                 extensionsIncluded: !!(flags & 128)
-            },
-            counter: new DataView(authData.slice(33,37)).getUint32(0, false),  // Big-Endian!
+    let parsed: any = {
+        rpIdHash: utils.toBase64url(authData.slice(0, 32)),
+        flags: {
+            userPresent: !!(flags & 1),
+            //reserved1: !!(flags & 2),
+            userVerified: !!(flags & 4),
+            backupEligibility: !!(flags & 8),
+            backupState: !!(flags & 16),
+            //reserved2: !!(flags & 32),
+            attestedData: !!(flags & 64),
+            extensionsIncluded: !!(flags & 128)
+        },
+        //counter: new DataView(authData.slice(33,37)).getUint32(0, false),  // Big-Endian!
     }
 
-    if(authData.byteLength > 37) {
+    if (authData.byteLength > 37) {
         // registration contains additional data
 
         const aaguid = extractAaguid(authData)
         // https://w3c.github.io/webauthn/#attested-credential-data
         //let credentialLength = new DataView(authData.slice(53,55)).getUint16(0, false) // Big-Endian!
-        
+
         parsed = {
             ...parsed,
             aaguid, // bytes 37->53
@@ -44,22 +44,22 @@ export function parseAuthBuffer(authData :ArrayBuffer) {
     return parsed
 }
 
-export function extractAaguid(authData :ArrayBuffer) :string {
+export function extractAaguid(authData: ArrayBuffer): string {
     return formatAaguid(authData.slice(37, 53)) // 16 bytes
 }
 
-function formatAaguid(buffer :ArrayBuffer) :string {
+function formatAaguid(buffer: ArrayBuffer): string {
     let aaguid = utils.bufferToHex(buffer)
-    aaguid = aaguid.substring(0,8) + '-' + aaguid.substring(8,12) + '-' + aaguid.substring(12,16) + '-' + aaguid.substring(16,20) + '-' + aaguid.substring(20,32)
+    aaguid = aaguid.substring(0, 8) + '-' + aaguid.substring(8, 12) + '-' + aaguid.substring(12, 16) + '-' + aaguid.substring(16, 20) + '-' + aaguid.substring(20, 32)
     return aaguid // example: "d41f5a69-b817-4144-a13c-9ebd6d9254d6"
 }
 
-export function resolveAuthenticatorName(aaguid :string) :string {
+export function resolveAuthenticatorName(aaguid: string): string {
     const aaguidMetadata = updatedAuthenticatorMetadata ?? authenticatorMetadata //await getAaguidMetadata()
     return aaguidMetadata[aaguid]?.name
 }
 
-let updatedAuthenticatorMetadata :any = null
+let updatedAuthenticatorMetadata: any = null
 
 // List of AAGUIDs are encoded as JWT here: https://mds.fidoalliance.org/
 export async function updateDevicesMetadata() {
@@ -75,12 +75,12 @@ export async function updateDevicesMetadata() {
     const json = JSON.parse(atob(payload))
     console.debug(json)
 
-    let aaguidMetadata :any = {}
-    for(const e of json.entries) {
-        if(!e.aaguid || !e.metadataStatement)
+    let aaguidMetadata: any = {}
+    for (const e of json.entries) {
+        if (!e.aaguid || !e.metadataStatement)
             continue
 
-        aaguidMetadata[e.aaguid] = {name: e.metadataStatement.description}
+        aaguidMetadata[e.aaguid] = { name: e.metadataStatement.description }
     }
 
     console.debug(aaguidMetadata)
